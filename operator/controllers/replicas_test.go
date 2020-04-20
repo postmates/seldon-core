@@ -66,7 +66,8 @@ func TestDeploymentReplicas(t *testing.T) {
 
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log: logger,
+		Log:     logger,
+		Ingress: NewDefaultIngress(),
 	}
 
 	// Just Predictor Replicas

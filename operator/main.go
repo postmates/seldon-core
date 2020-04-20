@@ -28,7 +28,6 @@ import (
 	machinelearningv1alpha3 "github.com/seldonio/seldon-core/operator/apis/machinelearning.seldon.io/v1alpha3"
 	"github.com/seldonio/seldon-core/operator/controllers"
 	k8sutils "github.com/seldonio/seldon-core/operator/utils/k8s"
-	istio "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -54,9 +53,6 @@ func init() {
 	_ = machinelearningv1alpha2.AddToScheme(scheme)
 	_ = machinelearningv1alpha3.AddToScheme(scheme)
 	_ = v1beta1.AddToScheme(scheme)
-	if controllers.GetEnv(controllers.ENV_ISTIO_ENABLED, "false") == "true" {
-		_ = istio.AddToScheme(scheme)
-	}
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -89,6 +85,22 @@ func main() {
 		namespace = watchNamespace
 	}
 
+	// Initialize ingress plugin
+	ingressPlugin := controllers.NewDefaultIngress()
+	if controllers.GetEnv(controllers.ENV_ISTIO_ENABLED, "false") == "true" {
+		setupLog.Info("Enabling Istio Ingress")
+		ingressPlugin = controllers.NewIstioIngress()
+	}
+	if controllers.GetEnv(controllers.ENV_AMBASSADOR_ENABLED, "false") == "true" {
+		setupLog.Info("Enabling Ambassador Ingress")
+		ingressPlugin = controllers.NewAmbassadorIngress()
+	}
+	if controllers.GetEnv(controllers.ENV_CONTOUR_ENABLED, "false") == "true" {
+		setupLog.Info("Enabling Contour Ingress")
+		ingressPlugin = controllers.NewContourIngress()
+	}
+	ingressPlugin.AddToScheme(scheme)
+
 	if createResources {
 		setupLog.Info("Intializing operator")
 		err := k8sutils.InitializeOperator(config, operatorNamespace, setupLog, scheme, namespace != "")
@@ -118,6 +130,7 @@ func main() {
 		Scheme:    mgr.GetScheme(),
 		Namespace: namespace,
 		Recorder:  mgr.GetEventRecorderFor(constants.ControllerName),
+		Ingress:   ingressPlugin,
 	}).SetupWithManager(mgr, constants.ControllerName); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SeldonDeployment")
 		os.Exit(1)

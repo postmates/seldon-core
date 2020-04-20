@@ -95,6 +95,10 @@ spec:
           value: "8000"
         - name: ENGINE_PROMETHEUS_PATH
           value: "/prometheus"
+        - name: CONTOUR_ENABLED
+          value: "true"
+        - name: CONTOUR_BASE_HOST
+          value: "contour"
         - name: ISTIO_ENABLED
           value: "false"
         - name: ISTIO_GATEWAY
