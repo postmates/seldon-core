@@ -73,7 +73,7 @@ func (i *ContourIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, e
 	return []runtime.Object{&contour.HTTPProxy{}}, nil
 }
 
-func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[string][]runtime.Object, error) {
+func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
 	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
 	contourIngressClass := GetEnv(ENV_CONTOUR_INGRESS_CLASS, "")
 	var annotations map[string]string
@@ -82,81 +82,64 @@ func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, 
 			"projectcontour.io/ingress.class": contourIngressClass,
 		}
 	}
-	var httpProxies []runtime.Object
+	var httpServices []contour.Service
+	var grpcServices []contour.Service
 	var routes []contour.Route
-	var grpcRoutes []contour.Route
 
 	for i, predictor := range mlDep.Spec.Predictors {
 		predictorServiceName := v1.GetPredictorKey(mlDep, &predictor)
+		httpServices = append(httpServices, contour.Service{
+			Name:   predictorServiceName,
+			Mirror: predictor.Shadow,
+			Weight: int64(predictor.Traffic),
+			Port:   ports[i].httpPort,
+		})
+		grpcServices = append(grpcServices, contour.Service{
+			Name:     predictorServiceName,
+			Mirror:   predictor.Shadow,
+			Weight:   int64(predictor.Traffic),
+			Port:     ports[i].grpcPort,
+			Protocol: &grpcProtocol,
+		})
+	}
+
+	if httpAllowed {
 		routes = append(routes, contour.Route{
 			Conditions: []contour.Condition{{
 				Prefix: "/",
 			}},
-			Services: []contour.Service{
-				{
-					Name:   predictorServiceName,
-					Mirror: predictor.Shadow,
-					Weight: int64(predictor.Traffic),
-					Port:   ports[i].httpPort,
-				},
-			},
+			Services: httpServices,
 		})
-		grpcRoutes = append(grpcRoutes, contour.Route{
-			Conditions: []contour.Condition{{
-				Prefix: "/",
-			}},
-			Services: []contour.Service{
-				{
-					Name:     predictorServiceName,
-					Mirror:   predictor.Shadow,
-					Weight:   int64(predictor.Traffic),
-					Port:     ports[i].grpcPort,
-					Protocol: &grpcProtocol,
-				},
-			},
-		})
-
 	}
 
-	if httpAllowed {
-		httpProxies = append(httpProxies, &contour.HTTPProxy{
+	if grpcAllowed {
+		routes = append(routes, []contour.Route{{
+			Conditions: []contour.Condition{{Prefix: constants.GRPCPathPrefixSeldon}},
+			Services:   grpcServices,
+		}, {
+			Conditions: []contour.Condition{{Prefix: constants.GRPCPathPrefixTensorflow}},
+			Services:   grpcServices,
+		}}...)
+	}
+
+	return map[IngressResourceType][]runtime.Object{
+		ContourHTTPProxies: {&contour.HTTPProxy{
 			ObjectMeta: v12.ObjectMeta{
-				Name:        seldonId + "-http",
+				Name:        seldonId,
 				Namespace:   namespace,
 				Annotations: annotations,
 			},
 			Spec: contour.HTTPProxySpec{
 				VirtualHost: &contour.VirtualHost{
 					Fqdn: fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost),
-					TLS:  nil, // TODO(jpg) look into TLS stuffs
 				},
 				Routes: routes,
 			},
-		})
-	}
-	if grpcAllowed {
-		httpProxies = append(httpProxies, &contour.HTTPProxy{
-			ObjectMeta: v12.ObjectMeta{
-				Name:        seldonId + "-grpc",
-				Namespace:   namespace,
-				Annotations: annotations,
-			},
-			Spec: contour.HTTPProxySpec{
-				VirtualHost: &contour.VirtualHost{
-					Fqdn: fmt.Sprintf("%s-grpc.%s", mlDep.Name, contourBaseHost),
-					TLS:  nil, // TODO(jpg) look into TLS stuffs
-				},
-				Routes: grpcRoutes,
-			},
-		})
-	}
-
-	return map[string][]runtime.Object{
-		"httpProxies": httpProxies,
+		}},
 	}, nil
 }
 
-func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[string][]runtime.Object, error) {
+func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
 	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
 	var httpProxies []runtime.Object
 
@@ -215,14 +198,14 @@ func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.Predi
 		})
 	}
 
-	return map[string][]runtime.Object{
-		"httpProxies": httpProxies,
+	return map[IngressResourceType][]runtime.Object{
+		ContourHTTPProxies: httpProxies,
 	}, nil
 }
 
-func (i *ContourIngress) CreateResources(resources map[string][]runtime.Object, instance *v1.SeldonDeployment, log logr.Logger) (bool, error) {
+func (i *ContourIngress) CreateResources(resources map[IngressResourceType][]runtime.Object, instance *v1.SeldonDeployment, log logr.Logger) (bool, error) {
 	ready := true
-	if httpProxies, ok := resources["httpProxies"]; ok == true {
+	if httpProxies, ok := resources[ContourHTTPProxies]; ok == true {
 		for _, s := range httpProxies {
 			httpProxy := s.(*contour.HTTPProxy)
 			if err := controllerutil.SetControllerReference(instance, httpProxy, i.scheme); err != nil {

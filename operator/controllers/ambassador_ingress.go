@@ -59,15 +59,15 @@ func (i *AmbassadorIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object
 }
 
 // Because Ambassador support creates no resources these do nothing
-func (i *AmbassadorIngress) GeneratePredictorResources(mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[string][]runtime.Object, error) {
+func (i *AmbassadorIngress) GeneratePredictorResources(mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
 	return nil, nil
 }
 
-func (i *AmbassadorIngress) GenerateExplainerResources(pSvcName string, p *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[string][]runtime.Object, error) {
+func (i *AmbassadorIngress) GenerateExplainerResources(pSvcName string, p *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
 	return nil, nil
 }
 
-func (i *AmbassadorIngress) CreateResources(resources map[string][]runtime.Object, instance *machinelearningv1.SeldonDeployment, log logr.Logger) (bool, error) {
+func (i *AmbassadorIngress) CreateResources(resources map[IngressResourceType][]runtime.Object, instance *machinelearningv1.SeldonDeployment, log logr.Logger) (bool, error) {
 	return true, nil
 }
 

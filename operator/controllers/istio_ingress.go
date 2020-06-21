@@ -83,7 +83,7 @@ func (i *IstioIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, err
 	return []runtime.Object{&istio.VirtualService{}}, nil
 }
 
-func (i *IstioIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[string][]runtime.Object, error) {
+func (i *IstioIngress) GeneratePredictorResources(mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
 
 	istioGateway := GetEnv(ENV_ISTIO_GATEWAY, "seldon-gateway")
 	istioTLSMode := GetEnv(ENV_ISTIO_TLS_MODE, "")
@@ -251,20 +251,20 @@ func (i *IstioIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, se
 	httpVsvc.Spec.Http[0].Route = routesHttp
 	grpcVsvc.Spec.Http[0].Route = routesGrpc
 
-	resources := map[string][]runtime.Object{
-		"destinationRules": drules,
+	resources := map[IngressResourceType][]runtime.Object{
+		IstioDestinationRules: drules,
 	}
 	if httpAllowed && grpcAllowed {
-		resources["virtualServices"] = []runtime.Object{httpVsvc, grpcVsvc}
+		resources[IstioVirtualServices] = []runtime.Object{httpVsvc, grpcVsvc}
 	} else if httpAllowed {
-		resources["virtualServices"] = []runtime.Object{httpVsvc}
+		resources[IstioVirtualServices] = []runtime.Object{httpVsvc}
 	} else {
-		resources["virtualServices"] = []runtime.Object{grpcVsvc}
+		resources[IstioVirtualServices] = []runtime.Object{grpcVsvc}
 	}
 	return resources, nil
 }
 
-func (i *IstioIngress) GenerateExplainerResources(pSvcName string, spec *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[string][]runtime.Object, error) {
+func (i *IstioIngress) GenerateExplainerResources(pSvcName string, spec *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
 	vsNameHttp := pSvcName + "-http"
 	if len(vsNameHttp) > 63 {
 		vsNameHttp = vsNameHttp[0:63]
@@ -379,16 +379,16 @@ func (i *IstioIngress) GenerateExplainerResources(pSvcName string, spec *v1.Pred
 		vsvcs = append(vsvcs, grpcVsvc)
 	}
 
-	resources := map[string][]runtime.Object{
-		"destinationRules": drules,
-		"virtualServices":  vsvcs,
+	resources := map[IngressResourceType][]runtime.Object{
+		IstioDestinationRules: drules,
+		IstioVirtualServices:  vsvcs,
 	}
 	return resources, nil
 }
 
-func (i *IstioIngress) CreateResources(resources map[string][]runtime.Object, instance *v1.SeldonDeployment, log logr.Logger) (bool, error) {
+func (i *IstioIngress) CreateResources(resources map[IngressResourceType][]runtime.Object, instance *machinelearningv1.SeldonDeployment, log logr.Logger) (bool, error) {
 	ready := true
-	if virtualServices, ok := resources["virtualServices"]; ok == true {
+	if virtualServices, ok := resources[IstioVirtualServices]; ok == true {
 		for _, s := range virtualServices {
 			svc := s.(*v1alpha3.VirtualService)
 			if err := controllerutil.SetControllerReference(instance, svc, i.scheme); err != nil {
@@ -471,7 +471,7 @@ func (i *IstioIngress) CreateResources(resources map[string][]runtime.Object, in
 		}
 	}
 
-	if destinationRules, ok := resources["destinationRules"]; ok == true {
+	if destinationRules, ok := resources[IstioDestinationRules]; ok == true {
 		for _, d := range destinationRules {
 			drule := d.(*istio.DestinationRule)
 			if err := controllerutil.SetControllerReference(instance, drule, i.scheme); err != nil {

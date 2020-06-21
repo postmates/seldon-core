@@ -236,7 +236,7 @@ func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonD
 		if err != nil {
 			return err
 		}
-		c.ingressResources = mergeResourceMap(c.ingressResources, ingressResources)
+		c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
 	}
 
 	return nil

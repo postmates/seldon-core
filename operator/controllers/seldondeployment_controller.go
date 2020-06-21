@@ -77,7 +77,7 @@ type components struct {
 	deployments           []*appsv1.Deployment
 	services              []*corev1.Service
 	hpas                  []*autoscaling.HorizontalPodAutoscaler
-	ingressResources      map[string][]runtime.Object
+	ingressResources      map[IngressResourceType][]runtime.Object
 	defaultDeploymentName string
 	addressable           *machinelearningv1.SeldonAddressable
 }
@@ -397,15 +397,15 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 	if err != nil {
 		return nil, err
 	}
-	c.ingressResources = mergeResourceMap(c.ingressResources, ingressResources)
+	c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
 	return &c, nil
 }
 
 // Merges maps of lists of runtime.Object
-func mergeResourceMap(tgt map[string][]runtime.Object, src map[string][]runtime.Object) map[string][]runtime.Object {
+func mergeIngressResourceMap(tgt map[IngressResourceType][]runtime.Object, src map[IngressResourceType][]runtime.Object) map[IngressResourceType][]runtime.Object {
 	// If the target map is nil, create it
 	if tgt == nil {
-		tgt = make(map[string][]runtime.Object, len(src))
+		tgt = make(map[IngressResourceType][]runtime.Object, len(src))
 	}
 	for resType := range src {
 		// If the resource type doesn't exist in the target then create it
