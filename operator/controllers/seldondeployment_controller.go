@@ -440,7 +440,7 @@ func createService(pSvcName string, seldonId string, p *machinelearningv1.Predic
 			Type:            corev1.ServiceTypeClusterIP,
 		},
 	}
-	
+
 	if isExecutorEnabled(mlDep) {
 		if engineHttpPort != 0 && len(psvc.Spec.Ports) == 0 {
 			psvc.Spec.Ports = append(psvc.Spec.Ports, corev1.ServicePort{Protocol: corev1.ProtocolTCP, Port: int32(engineHttpPort), TargetPort: intstr.FromInt(engineHttpPort), Name: "http"})

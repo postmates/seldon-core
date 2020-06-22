@@ -76,12 +76,21 @@ func (i *ContourIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, e
 func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
 	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
 	contourIngressClass := GetEnv(ENV_CONTOUR_INGRESS_CLASS, "")
+
+	// Set HTTPProxy FQDN using base host if configured
+	fqdn := mlDep.Name
+	if contourBaseHost != "" {
+		fqdn = fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost)
+	}
+
+	// Set ingress.class if configured
 	var annotations map[string]string
 	if contourIngressClass != "" {
 		annotations = map[string]string{
 			"projectcontour.io/ingress.class": contourIngressClass,
 		}
 	}
+
 	var httpServices []contour.Service
 	var grpcServices []contour.Service
 	var routes []contour.Route
@@ -131,7 +140,7 @@ func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, 
 			},
 			Spec: contour.HTTPProxySpec{
 				VirtualHost: &contour.VirtualHost{
-					Fqdn: fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost),
+					Fqdn: fqdn,
 				},
 				Routes: routes,
 			},
@@ -141,65 +150,58 @@ func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, 
 
 func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
 	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
-	var httpProxies []runtime.Object
+	// Set HTTPProxy FQDN using base host if configured
+	fqdn := mlDep.Name
+	if contourBaseHost != "" {
+		fqdn = fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost)
+	}
+
+	var routes []contour.Route
 
 	if engineHttpPort > 0 {
-		httpProxies = append(httpProxies, &contour.HTTPProxy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pSvcName + "-http",
-				Namespace: namespace,
-			},
-			Spec: contour.HTTPProxySpec{
-				VirtualHost: &contour.VirtualHost{
-					Fqdn: fmt.Sprintf("%s-explainer.%s", mlDep.Name, contourBaseHost),
-					TLS:  nil,
+		routes = append(routes, contour.Route{
+			Conditions: []contour.Condition{{
+				Prefix: "/",
+			}},
+			Services: []contour.Service{
+				{
+					Name:   pSvcName,
+					Weight: int64(100),
+					Port:   engineHttpPort,
 				},
-				Routes: []contour.Route{{
-					Conditions: []contour.Condition{{
-						Prefix: "/",
-					}},
-					Services: []contour.Service{
-						{
-							Name:   pSvcName,
-							Weight: int64(100),
-							Port:   engineHttpPort,
-						},
-					},
-				}},
 			},
 		})
 	}
 
 	if engineGrpcPort > 0 {
-		httpProxies = append(httpProxies, &contour.HTTPProxy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pSvcName + "-grpc",
-				Namespace: namespace,
-			},
-			Spec: contour.HTTPProxySpec{
-				VirtualHost: &contour.VirtualHost{
-					Fqdn: fmt.Sprintf("%s-explainer-grpc.%s", mlDep.Name, contourBaseHost),
-					TLS:  nil,
+		routes = append(routes, contour.Route{
+			Conditions: []contour.Condition{{
+				Prefix: "/", // TODO(jpg) explainer GRPC route prefix
+			}},
+			Services: []contour.Service{
+				{
+					Name:     pSvcName,
+					Weight:   int64(100),
+					Port:     engineGrpcPort,
+					Protocol: &grpcProtocol,
 				},
-				Routes: []contour.Route{{
-					Conditions: []contour.Condition{{
-						Prefix: "/",
-					}},
-					Services: []contour.Service{
-						{
-							Name:     pSvcName,
-							Weight:   int64(100),
-							Port:     engineGrpcPort,
-							Protocol: &grpcProtocol,
-						},
-					},
-				}},
 			},
 		})
 	}
 
 	return map[IngressResourceType][]runtime.Object{
-		ContourHTTPProxies: httpProxies,
+		ContourHTTPProxies: {&contour.HTTPProxy{
+			ObjectMeta: v12.ObjectMeta{
+				Name:      pSvcName,
+				Namespace: namespace,
+			},
+			Spec: contour.HTTPProxySpec{
+				VirtualHost: &contour.VirtualHost{
+					Fqdn: fqdn,
+				},
+				Routes: routes,
+			},
+		}},
 	}, nil
 }
 
