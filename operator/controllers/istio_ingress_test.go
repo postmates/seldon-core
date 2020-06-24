@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"k8s.io/client-go/tools/record"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -128,12 +129,13 @@ func TestCleanVirtualServices(t *testing.T) {
 	err = client.Create(context.Background(), vsvcRouge2)
 	g.Expect(err).To(BeNil())
 
-	// TODO(jpg): Make use Ingress interface
-	//okList := []*istio.VirtualService{vsvcOk}
-	//cleaner := &ResourceCleaner{instance: foundInstance, client: client, virtualServices: okList, logger: logrtesting.TestLogger{}}
-	//deleted, err := cleaner.cleanUnusedVirtualServices()
-	//g.Expect(err).To(BeNil())
-	//g.Expect(len(deleted)).To(Equal(2))
-	//g.Expect(deleted[0].Name).To(Equal(nameRouge1))
-	//g.Expect(deleted[1].Name).To(Equal(nameRouge2))
+	okList := []runtime.Object{vsvcOk}
+	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
+	recorder := record.NewFakeRecorder(10)
+	ready, deleted, err := cleanupVirtualServices(client, recorder, instance, okList, logger)
+	g.Expect(err).To(BeNil())
+	g.Expect(ready).To(BeTrue())
+	g.Expect(len(deleted)).To(Equal(2))
+	g.Expect(deleted[0].Name).To(Equal(nameRouge1))
+	g.Expect(deleted[1].Name).To(Equal(nameRouge2))
 }

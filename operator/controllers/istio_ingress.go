@@ -439,34 +439,10 @@ func (i *IstioIngress) CreateResources(resources map[IngressResourceType][]runti
 
 		// Cleanup unused VirtualService. This should usually only happen on Operator upgrades where there is a breaking change to the names of the VirtualServices created
 		if len(virtualServices) > 0 && ready {
-			// First gather existing list of virtual services
-			var deleted []*istio.VirtualService
-			vlist := &istio.VirtualServiceList{}
-			err := i.client.List(context.Background(), vlist, &client.ListOptions{Namespace: instance.Namespace})
-			if err != nil {
-				return false, err
-			}
-			for _, vsvc := range vlist.Items {
-				for _, ownerRef := range vsvc.OwnerReferences {
-					if ownerRef.Name == instance.Name {
-						found := false
-						for _, expectedVsvc := range virtualServices {
-							esvc := expectedVsvc.(*v1alpha3.VirtualService)
-							if esvc.Name == vsvc.Name {
-								found = true
-								break
-							}
-						}
-						if !found {
-							log.Info("Will delete VirtualService", "name", vsvc.Name, "namespace", vsvc.Namespace)
-							_ = i.client.Delete(context.Background(), &vsvc, client.PropagationPolicy(metav1.DeletePropagationForeground))
-							deleted = append(deleted, vsvc.DeepCopy())
-						}
-					}
-				}
-			}
-			for _, vsvcDeleted := range deleted {
-				i.recorder.Eventf(instance, v13.EventTypeNormal, constants.EventsDeleteVirtualService, "Delete VirtualService %q", vsvcDeleted.GetName())
+			b, deleted, err2 := cleanupVirtualServices(i.client, i.recorder, instance, virtualServices, log)
+			log.Info("Deleted VirtualServices", "deleted", deleted)
+			if err2 != nil {
+				return b, err2
 			}
 		}
 	}
@@ -522,6 +498,39 @@ func (i *IstioIngress) CreateResources(resources map[IngressResourceType][]runti
 	}
 
 	return ready, nil
+}
+
+func cleanupVirtualServices(k8sClient client.Client, recorder record.EventRecorder, instance *machinelearningv1.SeldonDeployment, virtualServices []runtime.Object, log logr.Logger) (bool, []*istio.VirtualService, error) {
+	// First gather existing list of virtual services
+	var deleted []*istio.VirtualService
+	vlist := &istio.VirtualServiceList{}
+	err := k8sClient.List(context.Background(), vlist, &client.ListOptions{Namespace: instance.Namespace})
+	if err != nil {
+		return false, nil, err
+	}
+	for _, vsvc := range vlist.Items {
+		for _, ownerRef := range vsvc.OwnerReferences {
+			if ownerRef.Name == instance.Name {
+				found := false
+				for _, expectedVsvc := range virtualServices {
+					esvc := expectedVsvc.(*v1alpha3.VirtualService)
+					if esvc.Name == vsvc.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					log.Info("Will delete VirtualService", "name", vsvc.Name, "namespace", vsvc.Namespace)
+					_ = k8sClient.Delete(context.Background(), &vsvc, client.PropagationPolicy(metav1.DeletePropagationForeground))
+					deleted = append(deleted, vsvc.DeepCopy())
+				}
+			}
+		}
+	}
+	for _, vsvcDeleted := range deleted {
+		recorder.Eventf(instance, v13.EventTypeNormal, constants.EventsDeleteVirtualService, "Delete VirtualService %q", vsvcDeleted.GetName())
+	}
+	return true, deleted, nil
 }
 
 // Istio plugin doesn't set any annotations on the service itself
