@@ -258,8 +258,8 @@ func (i *ContourIngress) CreateResources(resources map[IngressResourceType][]run
 		}
 
 		httpProxyList := &contour.HTTPProxyList{}
-		// TODO(jpg): What to do on error here?
 		_ = i.client.List(context.Background(), httpProxyList, &client.ListOptions{Namespace: instance.Namespace})
+		var deleted []*contour.HTTPProxy
 		for _, httpProxy := range httpProxyList.Items {
 			for _, ownerRef := range httpProxy.OwnerReferences {
 				if ownerRef.Name == instance.Name {
@@ -274,9 +274,13 @@ func (i *ContourIngress) CreateResources(resources map[IngressResourceType][]run
 					if !found {
 						log.Info("Will delete HTTPProxy", "name", httpProxy.Name, "namespace", httpProxy.Namespace)
 						_ = i.client.Delete(context.Background(), &httpProxy, client.PropagationPolicy(metav1.DeletePropagationForeground))
+						deleted = append(deleted, &httpProxy)
 					}
 				}
 			}
+		}
+		for _, deletedHttpProxy := range deleted {
+			i.recorder.Eventf(instance, v13.EventTypeNormal, constants.EventsDeleteHTTPProxy, "Delete HTTPProxy %q", deletedHttpProxy)
 		}
 	}
 	return true, nil
