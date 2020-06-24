@@ -74,7 +74,7 @@ func (i *ContourIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, e
 }
 
 func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
-	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
+	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "")
 	contourIngressClass := GetEnv(ENV_CONTOUR_INGRESS_CLASS, "")
 
 	// Set HTTPProxy FQDN using base host if configured
@@ -149,7 +149,8 @@ func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, 
 }
 
 func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
-	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "") // TODO(jpg): This to be better to handle cases when base host isn't set better
+	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "")
+
 	// Set HTTPProxy FQDN using base host if configured
 	fqdn := mlDep.Name
 	if contourBaseHost != "" {
