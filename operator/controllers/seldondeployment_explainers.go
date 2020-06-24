@@ -219,7 +219,7 @@ func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonD
 		c.deployments = append(c.deployments, deploy)
 
 		// Use seldondeployment name dash explainer as the external service name. This should allow canarying.
-		eSvc, err := createService(eSvcName, seldonId, p, mlDep, httpPort, grpcPort, true, log)
+		eSvc, err := createService(eSvcName, seldonId, p, mlDep, httpPort, grpcPort, true, nil, log)
 		if err != nil {
 			return err
 		}

@@ -269,7 +269,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 						if svc.Spec.Ports[0].Name == "grpc" {
 							httpAllowed = false
 							externalPorts[i] = httpGrpcPorts{httpPort: 0, grpcPort: port}
-							psvc, err := createService(pSvcName, seldonId, &p, mlDep, 0, port, false, log)
+							psvc, err := createService(pSvcName, seldonId, &p, mlDep, 0, port, false, r.Ingress, log)
 							if err != nil {
 								return nil, err
 							}
@@ -283,7 +283,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 						} else {
 							externalPorts[i] = httpGrpcPorts{httpPort: port, grpcPort: 0}
 							grpcAllowed = false
-							psvc, err := createService(pSvcName, seldonId, &p, mlDep, port, 0, false, log)
+							psvc, err := createService(pSvcName, seldonId, &p, mlDep, port, 0, false, r.Ingress, log)
 							if err != nil {
 								return nil, err
 							}
@@ -352,7 +352,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 			if grpcAllowed == false {
 				grpcPort = 0
 			}
-			psvc, err := createService(pSvcName, seldonId, &p, mlDep, httpPort, grpcPort, false, log)
+			psvc, err := createService(pSvcName, seldonId, &p, mlDep, httpPort, grpcPort, false, r.Ingress, log)
 			if err != nil {
 
 				return nil, err
@@ -419,12 +419,7 @@ func mergeIngressResourceMap(tgt map[IngressResourceType][]runtime.Object, src m
 }
 
 // Creates Service for Predictor - exposed externally via ingress plugin
-func createService(pSvcName string, seldonId string, p *machinelearningv1.PredictorSpec,
-	mlDep *machinelearningv1.SeldonDeployment,
-	engineHttpPort int,
-	engineGrpcPort int,
-	isExplainer bool,
-	log logr.Logger) (pSvc *corev1.Service, err error) {
+func createService(pSvcName string, seldonId string, p *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, engineHttpPort int, engineGrpcPort int, isExplainer bool, ingress Ingress, log logr.Logger) (pSvc *corev1.Service, err error) {
 	namespace := getNamespace(mlDep)
 
 	psvc := &corev1.Service{
@@ -459,14 +454,13 @@ func createService(pSvcName string, seldonId string, p *machinelearningv1.Predic
 		}
 	}
 
-	if GetEnv("AMBASSADOR_ENABLED", "false") == "true" {
-		psvc.Annotations = make(map[string]string)
-		//Create top level Service
-		ambassadorConfig, err := getAmbassadorConfigs(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
-		if err != nil {
-			return nil, err
-		}
-		psvc.Annotations[AMBASSADOR_ANNOTATION] = ambassadorConfig
+	// Create top level Service
+	ingressAnnotations, err :=  ingress.GenerateServiceAnnotations(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
+	if err != nil {
+		return nil, err
+	}
+	if ingressAnnotations != nil {
+		psvc.Annotations = ingressAnnotations
 	}
 
 	if getAnnotation(mlDep, machinelearningv1.ANNOTATION_HEADLESS_SVC, "false") != "false" {
