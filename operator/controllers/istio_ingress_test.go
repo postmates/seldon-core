@@ -138,4 +138,13 @@ func TestCleanVirtualServices(t *testing.T) {
 	g.Expect(len(deleted)).To(Equal(2))
 	g.Expect(deleted[0].Name).To(Equal(nameRouge1))
 	g.Expect(deleted[1].Name).To(Equal(nameRouge2))
+
+	// Delete events should be emitted
+	expectedEvents := 2
+	var events []string
+	for i := 0; i < expectedEvents; i++ {
+		evt := <-recorder.Events
+		events = append(events, evt)
+	}
+	g.Expect(len(events)).To(Equal(expectedEvents))
 }
