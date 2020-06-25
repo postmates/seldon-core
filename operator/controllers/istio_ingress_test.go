@@ -147,4 +147,6 @@ func TestCleanVirtualServices(t *testing.T) {
 		events = append(events, evt)
 	}
 	g.Expect(len(events)).To(Equal(expectedEvents))
+	g.Expect(events[0]).To(Equal("Normal DeleteVirtualService Delete VirtualService \"name-rouge1\""))
+	g.Expect(events[1]).To(Equal("Normal DeleteVirtualService Delete VirtualService \"name-rouge2\""))
 }
