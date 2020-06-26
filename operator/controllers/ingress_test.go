@@ -21,7 +21,7 @@ func createSeldonDeploymentForIngressTest(name string, namespace string) *machin
 		Spec: machinelearningv1.SeldonDeploymentSpec{
 			Predictors: []machinelearningv1.PredictorSpec{
 				{
-					Name:     "p1",
+					Name: "p1",
 					ComponentSpecs: []*machinelearningv1.SeldonPodSpec{
 						{
 							Metadata: metav1.ObjectMeta{},

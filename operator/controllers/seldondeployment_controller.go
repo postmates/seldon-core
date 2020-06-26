@@ -455,7 +455,7 @@ func createService(pSvcName string, seldonId string, p *machinelearningv1.Predic
 	}
 
 	// Create top level Service
-	ingressAnnotations, err :=  ingress.GenerateServiceAnnotations(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
+	ingressAnnotations, err := ingress.GenerateServiceAnnotations(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
 	if err != nil {
 		return nil, err
 	}
