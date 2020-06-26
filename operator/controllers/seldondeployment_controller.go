@@ -67,7 +67,7 @@ type SeldonDeploymentReconciler struct {
 	Namespace string
 	Recorder  record.EventRecorder
 	ClientSet kubernetes.Interface
-	Ingress   Ingress
+	Ingresses []Ingress
 }
 
 //---------------- Old part
@@ -269,7 +269,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 						if svc.Spec.Ports[0].Name == "grpc" {
 							httpAllowed = false
 							externalPorts[i] = httpGrpcPorts{httpPort: 0, grpcPort: port}
-							psvc, err := createService(pSvcName, seldonId, &p, mlDep, 0, port, false, r.Ingress, log)
+							psvc, err := createService(pSvcName, seldonId, &p, mlDep, 0, port, false, r.Ingresses, log)
 							if err != nil {
 								return nil, err
 							}
@@ -283,7 +283,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 						} else {
 							externalPorts[i] = httpGrpcPorts{httpPort: port, grpcPort: 0}
 							grpcAllowed = false
-							psvc, err := createService(pSvcName, seldonId, &p, mlDep, port, 0, false, r.Ingress, log)
+							psvc, err := createService(pSvcName, seldonId, &p, mlDep, port, 0, false, r.Ingresses, log)
 							if err != nil {
 								return nil, err
 							}
@@ -352,7 +352,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 			if grpcAllowed == false {
 				grpcPort = 0
 			}
-			psvc, err := createService(pSvcName, seldonId, &p, mlDep, httpPort, grpcPort, false, r.Ingress, log)
+			psvc, err := createService(pSvcName, seldonId, &p, mlDep, httpPort, grpcPort, false, r.Ingresses, log)
 			if err != nil {
 
 				return nil, err
@@ -381,7 +381,7 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 		}
 
 		ei := NewExplainerInitializer(r.ClientSet)
-		err = ei.createExplainer(mlDep, &p, &c, pSvcName, securityContext, r.Ingress, log)
+		err = ei.createExplainer(mlDep, &p, &c, pSvcName, securityContext, r.Ingresses, log)
 		if err != nil {
 			return nil, err
 		}
@@ -393,12 +393,28 @@ func (r *SeldonDeploymentReconciler) createComponents(mlDep *machinelearningv1.S
 		return nil, err
 	}
 
-	ingressResources, err := r.Ingress.GeneratePredictorResources(mlDep, seldonId, namespace, externalPorts, httpAllowed, grpcAllowed)
-	if err != nil {
-		return nil, err
+	for _, ingress := range r.Ingresses {
+		ingressResources, err := ingress.GeneratePredictorResources(mlDep, seldonId, namespace, externalPorts, httpAllowed, grpcAllowed)
+		if err != nil {
+			return nil, err
+		}
+		c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
 	}
-	c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
+
 	return &c, nil
+}
+
+func mergeAnnotations(tgt map[string]string, src map[string]string) map[string]string {
+	if src == nil {
+		return nil
+	}
+	if tgt == nil {
+		tgt = make(map[string]string, len(src))
+	}
+	for k, v := range src {
+		tgt[k] = v
+	}
+	return tgt
 }
 
 // Merges maps of lists of runtime.Object
@@ -419,7 +435,7 @@ func mergeIngressResourceMap(tgt map[IngressResourceType][]runtime.Object, src m
 }
 
 // Creates Service for Predictor - exposed externally via ingress plugin
-func createService(pSvcName string, seldonId string, p *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, engineHttpPort int, engineGrpcPort int, isExplainer bool, ingress Ingress, log logr.Logger) (pSvc *corev1.Service, err error) {
+func createService(pSvcName string, seldonId string, p *machinelearningv1.PredictorSpec, mlDep *machinelearningv1.SeldonDeployment, engineHttpPort int, engineGrpcPort int, isExplainer bool, ingresses []Ingress, log logr.Logger) (pSvc *corev1.Service, err error) {
 	namespace := getNamespace(mlDep)
 
 	psvc := &corev1.Service{
@@ -455,12 +471,12 @@ func createService(pSvcName string, seldonId string, p *machinelearningv1.Predic
 	}
 
 	// Create top level Service
-	ingressAnnotations, err := ingress.GenerateServiceAnnotations(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
-	if err != nil {
-		return nil, err
-	}
-	if ingressAnnotations != nil {
-		psvc.Annotations = ingressAnnotations
+	for _, ingress := range ingresses {
+		ingressAnnotations, err := ingress.GenerateServiceAnnotations(mlDep, p, pSvcName, engineHttpPort, engineGrpcPort, isExplainer)
+		if err != nil {
+			return nil, err
+		}
+		psvc.Annotations = mergeAnnotations(psvc.Annotations, ingressAnnotations)
 	}
 
 	if getAnnotation(mlDep, machinelearningv1.ANNOTATION_HEADLESS_SVC, "false") != "false" {
@@ -961,9 +977,11 @@ func (r *SeldonDeploymentReconciler) completeServiceCreation(instance *machinele
 		return err
 	}
 
-	_, err = r.Ingress.CreateResources(components.ingressResources, instance, log)
-	if err != nil {
-		return err
+	for _, ingress := range r.Ingresses {
+		_, err = ingress.CreateResources(components.ingressResources, instance, log)
+		if err != nil {
+			return err
+		}
 	}
 
 	statusCopy := instance.Status.DeepCopy()
@@ -1265,9 +1283,13 @@ func (r *SeldonDeploymentReconciler) SetupWithManager(mgr ctrl.Manager, name str
 		return err
 	}
 
-	ingressObjects, err := r.Ingress.SetupWithManager(mgr)
-	if err != nil {
-		return err
+	var ingressObjects []runtime.Object
+	for _, ingress := range r.Ingresses {
+		objs, err := ingress.SetupWithManager(mgr)
+		if err != nil {
+			return err
+		}
+		ingressObjects = append(ingressObjects, objs...)
 	}
 
 	controller := ctrl.NewControllerManagedBy(mgr).

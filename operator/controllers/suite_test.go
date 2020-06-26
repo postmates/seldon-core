@@ -196,7 +196,6 @@ var _ = BeforeSuite(func(done Done) {
 		Log:       ctrl.Log.WithName("controllers").WithName("SeldonDeployment"),
 		Scheme:    k8sManager.GetScheme(),
 		Recorder:  k8sManager.GetEventRecorderFor(constants.ControllerName),
-		Ingress:   NewDefaultIngress(),
 	}).SetupWithManager(k8sManager, constants.ControllerName)
 	Expect(err).ToNot(HaveOccurred())
 

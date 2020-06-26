@@ -74,7 +74,7 @@ func getExplainerConfigsFromMap(configMap *corev1.ConfigMap) (*ExplainerConfig, 
 	return explainerConfig, nil
 }
 
-func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonDeployment, p *machinelearningv1.PredictorSpec, c *components, pSvcName string, podSecurityContect *corev1.PodSecurityContext, ingress Ingress, log logr.Logger) error {
+func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonDeployment, p *machinelearningv1.PredictorSpec, c *components, pSvcName string, podSecurityContect *corev1.PodSecurityContext, ingresses []Ingress, log logr.Logger) error {
 
 	if !isEmptyExplainer(p.Explainer) {
 
@@ -219,7 +219,7 @@ func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonD
 		c.deployments = append(c.deployments, deploy)
 
 		// Use seldondeployment name dash explainer as the external service name. This should allow canarying.
-		eSvc, err := createService(eSvcName, seldonId, p, mlDep, httpPort, grpcPort, true, ingress, log)
+		eSvc, err := createService(eSvcName, seldonId, p, mlDep, httpPort, grpcPort, true, ingresses, log)
 		if err != nil {
 			return err
 		}
@@ -232,11 +232,13 @@ func (ei *ExplainerInitialiser) createExplainer(mlDep *machinelearningv1.SeldonD
 		if grpcPort > 0 {
 			c.serviceDetails[eSvcName].GrpcEndpoint = eSvcName + "." + eSvc.Namespace + ":" + strconv.Itoa(grpcPort)
 		}
-		ingressResources, err := ingress.GenerateExplainerResources(eSvcName, p, mlDep, seldonId, getNamespace(mlDep), httpPort, grpcPort)
-		if err != nil {
-			return err
+		for _, ingress := range ingresses {
+			ingressResources, err := ingress.GenerateExplainerResources(eSvcName, p, mlDep, seldonId, getNamespace(mlDep), httpPort, grpcPort)
+			if err != nil {
+				return err
+			}
+			c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
 		}
-		c.ingressResources = mergeIngressResourceMap(c.ingressResources, ingressResources)
 	}
 
 	return nil

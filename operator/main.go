@@ -85,21 +85,24 @@ func main() {
 		namespace = watchNamespace
 	}
 
+	var ingresses []controllers.Ingress
 	// Initialize ingress plugin
-	ingressPlugin := controllers.NewDefaultIngress()
 	if controllers.GetEnv(controllers.ENV_ISTIO_ENABLED, "false") == "true" {
 		setupLog.Info("Enabling Istio Ingress")
-		ingressPlugin = controllers.NewIstioIngress()
+		ingresses = append(ingresses, controllers.NewIstioIngress())
 	}
 	if controllers.GetEnv(controllers.ENV_AMBASSADOR_ENABLED, "false") == "true" {
 		setupLog.Info("Enabling Ambassador Ingress")
-		ingressPlugin = controllers.NewAmbassadorIngress()
+		ingresses = append(ingresses, controllers.NewAmbassadorIngress())
 	}
 	if controllers.GetEnv(controllers.ENV_CONTOUR_ENABLED, "false") == "true" {
 		setupLog.Info("Enabling Contour Ingress")
-		ingressPlugin = controllers.NewContourIngress()
+		ingresses = append(ingresses, controllers.NewContourIngress())
 	}
-	ingressPlugin.AddToScheme(scheme)
+	// Add ingress types to scheme
+	for _, ingress := range ingresses {
+		ingress.AddToScheme(scheme)
+	}
 
 	if createResources {
 		setupLog.Info("Intializing operator")
@@ -130,7 +133,7 @@ func main() {
 		Scheme:    mgr.GetScheme(),
 		Namespace: namespace,
 		Recorder:  mgr.GetEventRecorderFor(constants.ControllerName),
-		Ingress:   ingressPlugin,
+		Ingresses: ingresses,
 	}).SetupWithManager(mgr, constants.ControllerName); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SeldonDeployment")
 		os.Exit(1)

@@ -19,8 +19,7 @@ func TestSecurityContextCreateComponents(t *testing.T) {
 	instance.Spec.DefaultSeldonDeployment(name, namespace)
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log:     logger,
-		Ingress: NewDefaultIngress(),
+		Log: logger,
 	}
 
 	user := int64(2)
@@ -43,8 +42,7 @@ func TestNoSecurityContextCreateComponents(t *testing.T) {
 	instance.Spec.DefaultSeldonDeployment(name, namespace)
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log:     logger,
-		Ingress: NewDefaultIngress(),
+		Log: logger,
 	}
 
 	var podSecurityContext *corev1.PodSecurityContext

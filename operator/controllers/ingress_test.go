@@ -53,8 +53,8 @@ func TestContourIngress(t *testing.T) {
 
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log:     logger,
-		Ingress: NewContourIngress(),
+		Log:       logger,
+		Ingresses: []Ingress{NewContourIngress()},
 	}
 
 	instance := createSeldonDeploymentForIngressTest(name, namespace)
@@ -81,8 +81,8 @@ func TestIstioIngress(t *testing.T) {
 
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log:     logger,
-		Ingress: NewIstioIngress(),
+		Log:       logger,
+		Ingresses: []Ingress{NewIstioIngress()},
 	}
 
 	instance := createSeldonDeploymentForIngressTest(name, namespace)
@@ -112,8 +112,8 @@ func TestAmbassadorIngress(t *testing.T) {
 
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
-		Log:     logger,
-		Ingress: NewAmbassadorIngress(),
+		Log:       logger,
+		Ingresses: []Ingress{NewAmbassadorIngress()},
 	}
 
 	instance := createSeldonDeploymentForIngressTest(name, namespace)
