@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
@@ -20,12 +21,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"text/template"
 )
 
 const (
-	ENV_CONTOUR_ENABLED       = "CONTOUR_ENABLED"
-	ENV_CONTOUR_BASE_HOST     = "CONTOUR_BASE_HOST"
-	ENV_CONTOUR_INGRESS_CLASS = "CONTOUR_INGRESS_CLASS"
+	ENV_CONTOUR_ENABLED                 = "CONTOUR_ENABLED"
+	ENV_CONTOUR_PREDICTOR_FQDN_TEMPLATE = "CONTOUR_PREDICTOR_FQDN_TEMPLATE"
+	ENV_CONTOUR_EXPLAINER_FQDN_TEMPLATE = "CONTOUR_EXPLAINER_FQDN_TEMPLATE"
+	ENV_CONTOUR_INGRESS_CLASS           = "CONTOUR_INGRESS_CLASS"
 )
 
 var grpcProtocol = "h2c"
@@ -74,13 +77,12 @@ func (i *ContourIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, e
 }
 
 func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
-	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "")
+	fqdnTemplate := GetEnv(ENV_CONTOUR_PREDICTOR_FQDN_TEMPLATE, "{{.Name}}")
 	contourIngressClass := GetEnv(ENV_CONTOUR_INGRESS_CLASS, "")
 
-	// Set HTTPProxy FQDN using base host if configured
-	fqdn := mlDep.Name
-	if contourBaseHost != "" {
-		fqdn = fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost)
+	fqdn, err := templateFqdnContour(fqdnTemplate, mlDep)
+	if err != nil {
+		return nil, err
 	}
 
 	// Set ingress.class if configured
@@ -148,13 +150,25 @@ func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, 
 	}, nil
 }
 
-func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
-	contourBaseHost := GetEnv(ENV_CONTOUR_BASE_HOST, "")
+func templateFqdnContour(templateString string, mlDep *v1.SeldonDeployment) (string, error) {
+	tmpl, err := template.New("fqdn").Parse(templateString)
+	if err != nil {
+		return "", fmt.Errorf("error parsing Contour FQDN template: %s", err)
+	}
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, mlDep)
+	if err != nil {
+		return "", fmt.Errorf("error executing Contour FQDN template: %s", err)
+	}
+	return buf.String(), nil
+}
 
-	// Set HTTPProxy FQDN using base host if configured
-	fqdn := mlDep.Name
-	if contourBaseHost != "" {
-		fqdn = fmt.Sprintf("%s.%s", mlDep.Name, contourBaseHost)
+func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
+	fqdnTemplate := GetEnv(ENV_CONTOUR_EXPLAINER_FQDN_TEMPLATE, "{{.Name}}-explainer")
+
+	fqdn, err := templateFqdnContour(fqdnTemplate, mlDep)
+	if err != nil {
+		return nil, err
 	}
 
 	var routes []contour.Route
