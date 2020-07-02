@@ -50,6 +50,7 @@ func TestContourIngress(t *testing.T) {
 	g := NewGomegaWithT(t)
 	name := "dep"
 	namespace := "default"
+	fqdn := "dep.default"
 
 	logger := ctrl.Log.WithName("controllers").WithName("SeldonDeployment")
 	reconciler := &SeldonDeploymentReconciler{
@@ -71,7 +72,7 @@ func TestContourIngress(t *testing.T) {
 	g.Expect(len(httpProxies)).To(Equal(1))
 	httpProxy := httpProxies[0].(*contour.HTTPProxy)
 	g.Expect(httpProxy.Name).To(Equal(name))
-	g.Expect(httpProxy.Spec.VirtualHost.Fqdn).To(Equal(name))
+	g.Expect(httpProxy.Spec.VirtualHost.Fqdn).To(Equal(fqdn))
 }
 
 func TestIstioIngress(t *testing.T) {

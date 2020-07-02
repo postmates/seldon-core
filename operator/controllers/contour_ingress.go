@@ -77,7 +77,7 @@ func (i *ContourIngress) SetupWithManager(mgr ctrl.Manager) ([]runtime.Object, e
 }
 
 func (i *ContourIngress) GeneratePredictorResources(mlDep *v1.SeldonDeployment, seldonId string, namespace string, ports []httpGrpcPorts, httpAllowed bool, grpcAllowed bool) (map[IngressResourceType][]runtime.Object, error) {
-	fqdnTemplate := GetEnv(ENV_CONTOUR_PREDICTOR_FQDN_TEMPLATE, "{{.Name}}")
+	fqdnTemplate := GetEnv(ENV_CONTOUR_PREDICTOR_FQDN_TEMPLATE, "{{.Name}}.{{.ObjectMeta.Namespace}}")
 	contourIngressClass := GetEnv(ENV_CONTOUR_INGRESS_CLASS, "")
 
 	fqdn, err := templateFqdnContour(fqdnTemplate, mlDep)
@@ -164,7 +164,7 @@ func templateFqdnContour(templateString string, mlDep *v1.SeldonDeployment) (str
 }
 
 func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.PredictorSpec, mlDep *v1.SeldonDeployment, seldonId string, namespace string, engineHttpPort int, engineGrpcPort int) (map[IngressResourceType][]runtime.Object, error) {
-	fqdnTemplate := GetEnv(ENV_CONTOUR_EXPLAINER_FQDN_TEMPLATE, "{{.Name}}-explainer")
+	fqdnTemplate := GetEnv(ENV_CONTOUR_EXPLAINER_FQDN_TEMPLATE, "{{.Name}}-explainer.{{.ObjectMeta.Namespace}}")
 
 	fqdn, err := templateFqdnContour(fqdnTemplate, mlDep)
 	if err != nil {
@@ -191,16 +191,14 @@ func (i *ContourIngress) GenerateExplainerResources(pSvcName string, p *v1.Predi
 	if engineGrpcPort > 0 {
 		routes = append(routes, contour.Route{
 			Conditions: []contour.Condition{{
-				Prefix: "/", // TODO(jpg) explainer GRPC route prefix
+				Prefix: "/",
 			}},
-			Services: []contour.Service{
-				{
-					Name:     pSvcName,
-					Weight:   int64(100),
-					Port:     engineGrpcPort,
-					Protocol: &grpcProtocol,
-				},
-			},
+			Services: []contour.Service{{
+				Name:     pSvcName,
+				Weight:   int64(100),
+				Port:     engineGrpcPort,
+				Protocol: &grpcProtocol,
+			}},
 		})
 	}
 
