@@ -30,6 +30,10 @@ HELM_CREATERESOURCES_RBAC_IF_START = "{{- if .Values.managerCreateResources }}\n
 HELM_IF_END = "{{- end }}\n"
 
 HELM_ENV_SUBST = {
+    "CONTOUR_ENABLED": "contour.enabled",
+    "CONTOUR_PREDICTOR_FQDN_TEMPLATE": "contour.predictorTemplate",
+    "CONTOUR_EXPLAINER_FQDN_TEMPLATE": "contour.explainerTemplate",
+    "CONTOUR_INGRESS_CLASS": "contour.ingressClass",
     "AMBASSADOR_ENABLED": "ambassador.enabled",
     "AMBASSADOR_SINGLE_NAMESPACE": "ambassador.singleNamespace",
     "ENGINE_SERVER_GRPC_PORT": "engine.grpc.port",
@@ -123,7 +127,9 @@ if __name__ == "__main__":
                 ] = "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
 
                 # ServiceAccount
-                res["spec"]["template"]["spec"]["serviceAccountName"] = helm_value("serviceAccount.name")
+                res["spec"]["template"]["spec"]["serviceAccountName"] = helm_value(
+                    "serviceAccount.name"
+                )
 
                 # Resource requests
                 res["spec"]["template"]["spec"]["containers"][0]["resources"][
@@ -283,11 +289,11 @@ if __name__ == "__main__":
                 fdata = HELM_SPARTAKUS_IF_START + fdata + HELM_IF_END
             elif name == "seldon-webhook-rolebinding" or name == "seldon-webhook-role":
                 fdata = (
-                        HELM_CREATERESOURCES_RBAC_IF_START
-                        + HELM_RBAC_IF_START
-                        + fdata
-                        + HELM_IF_END
-                        + HELM_IF_END
+                    HELM_CREATERESOURCES_RBAC_IF_START
+                    + HELM_RBAC_IF_START
+                    + fdata
+                    + HELM_IF_END
+                    + HELM_IF_END
                 )
             # cluster roles for single namespace
             elif name == "seldon-manager-rolebinding" or name == "seldon-manager-role":
@@ -350,12 +356,8 @@ if __name__ == "__main__":
             elif (
                 name == "seldon-leader-election-rolebinding"
                 or name == "seldon-leader-election-role"
-                ):
-                fdata = (
-                        HELM_RBAC_IF_START
-                        + fdata
-                        + HELM_IF_END
-                )
+            ):
+                fdata = HELM_RBAC_IF_START + fdata + HELM_IF_END
             elif name == "seldon-manager" and kind == "serviceaccount":
                 fdata = HELM_SA_IF_START + fdata + HELM_IF_END
             elif kind == "issuer" or kind == "certificate":
